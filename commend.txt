@@ -1,1 +1,3 @@
 curl -fsSL https://raw.githubusercontent.com/gregory01234/ai-factory-boot/main/bootstrap.sh -o bootstrap.sh && chmod +x bootstrap.sh && sudo bash ./bootstrap.sh
+czyszczenie po nieudanej instalacji
+ rm -rf ~/ai-factory-boot ~/ai-orchestrator ~/ai-agent-base ~/bootstrap.sh ~/.kube && sudo rm -rf /etc/rancher && sudo rm -rf /var/lib/rancher && sudo rm -rf /usr/local/bin/k3s-uninstall.sh && sudo apt remove -y docker.io kubectl git curl && sudo apt autoremove -y && sudo apt clean
