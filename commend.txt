@@ -1,0 +1,1 @@
+curl -fsSL https://raw.githubusercontent.com/gregory01234/ai-factory-boot/main/bootstrap.sh -o bootstrap.sh && chmod +x bootstrap.sh && sudo bash ./bootstrap.sh
