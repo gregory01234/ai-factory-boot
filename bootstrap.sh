@@ -1,71 +1,99 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 AI FACTORY BOOT v2 START"
+echo "🚀 AI FACTORY BOOT v3 START (DETERMINISTIC MODE)"
 
 REPO_DIR="$HOME/ai-factory-boot"
 
 # =========================
-# 1. SYSTEM DEPENDENCIES
+# 1. BASE SYSTEM SETUP
 # =========================
 echo "📦 installing base dependencies..."
-sudo apt update -y
-sudo apt install -y git curl docker.io ca-certificates
+apt update -y
+apt install -y git curl ca-certificates ansible
 
 # =========================
-# 2. KUBECTL + K3S FIX (HARDENED)
+# 2. K3S INSTALL (IF MISSING)
 # =========================
-echo "🔧 configuring kubernetes access..."
+echo "🔍 checking k3s..."
 
-K3S_CONFIG="/etc/rancher/k3s/k3s.yaml"
+if ! command -v kubectl >/dev/null 2>&1 || [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
+  echo "🚀 installing k3s..."
+  curl -sfL https://get.k3s.io | sh -
 
-if [ -f "$K3S_CONFIG" ]; then
-    echo "📦 k3s detected — fixing kubeconfig"
+  echo "⏳ waiting for k3s API..."
+  sleep 10
 
-    mkdir -p "$HOME/.kube"
-    sudo cp "$K3S_CONFIG" "$HOME/.kube/config"
-    sudo chown $(id -u):$(id -g) "$HOME/.kube/config"
-    chmod 600 "$HOME/.kube/config"
-
-    export KUBECONFIG="$HOME/.kube/config"
-
-    grep -q "KUBECONFIG" "$HOME/.bashrc" || \
-      echo 'export KUBECONFIG=$HOME/.kube/config' >> "$HOME/.bashrc"
-
-else
-    echo "⚠️ k3s not found — installing kubectl only"
-    curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+  # wait until kubeconfig exists
+  while [ ! -f /etc/rancher/k3s/k3s.yaml ]; do
+    echo "⏳ waiting for kubeconfig..."
+    sleep 2
+  done
 fi
 
 # =========================
-# 3. CLEAN WORKSPACE
+# 3. KUBECONFIG FIX
 # =========================
-echo "🧹 preparing factory workspace..."
+echo "🔧 configuring kubeconfig..."
+
+mkdir -p $HOME/.kube
+cp /etc/rancher/k3s/k3s.yaml $HOME/.kube/config || true
+chown $(id -u):$(id -g) $HOME/.kube/config || true
+
+export KUBECONFIG=$HOME/.kube/config
+echo 'export KUBECONFIG=$HOME/.kube/config' >> ~/.bashrc || true
+
+# =========================
+# 4. WAIT FOR K8S READY
+# =========================
+echo "⏳ waiting for Kubernetes to be READY..."
+
+until kubectl get nodes >/dev/null 2>&1; do
+  echo "⏳ cluster not ready yet..."
+  sleep 3
+done
+
+echo "✅ Kubernetes READY"
+
+# =========================
+# 5. CLONE SYSTEMS
+# =========================
+echo "📥 preparing workspace..."
 rm -rf "$REPO_DIR"
 mkdir -p "$REPO_DIR"
 
-# =========================
-# 4. CLONE SYSTEMS
-# =========================
-echo "📥 cloning orchestrator..."
 git clone https://github.com/gregory01234/ai-orchestrator.git "$REPO_DIR/ai-orchestrator"
-
-echo "📥 cloning agent base..."
 git clone https://github.com/gregory01234/ai-agent-base.git "$REPO_DIR/ai-agent-base"
 
 # =========================
-# 5. BOOT ORCHESTRATOR
+# 6. WAIT FOR STABILITY
+# =========================
+echo "⏳ waiting cluster stabilization..."
+sleep 5
+
+kubectl get nodes
+kubectl get pods -A || true
+
+# =========================
+# 7. BOOT ORCHESTRATOR
 # =========================
 echo "🚀 starting orchestrator..."
 
 cd "$REPO_DIR/ai-orchestrator"
 chmod +x system.sh
 
-sudo -E ./system.sh bootstrap
+sudo ./system.sh bootstrap
+
+# =========================
+# 8. FINAL WAIT + VERIFY
+# =========================
+echo "⏳ final stabilization check..."
+sleep 5
+
+kubectl get pods -A
 
 echo ""
-echo "✅ FACTORY READY"
-echo "🧠 orchestrator: running"
-echo "📦 registry: inside k8s"
-echo "⚙️ factory: system.sh active"
+echo "✅ FACTORY READY (v3)"
+echo "🧠 orchestrator: active"
+echo "📦 kubernetes: stable"
+echo "⚙️ factory: enabled"
